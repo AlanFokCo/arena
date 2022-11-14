@@ -177,7 +177,12 @@ func (t *TrainingJobClient) Attach(jobName string, jobType types.TrainingJobType
 // Delete deletes the target training job
 func (t *TrainingJobClient) Delete(jobType types.TrainingJobType, jobNames ...string) error {
 	for _, jobName := range jobNames {
-		err := training.DeleteTrainingJob(jobName, t.namespace, jobType)
+		err := training.ScaleInTensorboardFromTrainingJob(jobName, t.namespace, t.configer.GetClientSet())
+		if err != nil {
+			return err
+		}
+
+		err = training.DeleteTrainingJob(jobName, t.namespace, jobType)
 		if err != nil {
 			if err == types.ErrTrainingJobNotFound {
 				return nil

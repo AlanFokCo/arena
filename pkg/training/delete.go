@@ -16,6 +16,8 @@ package training
 
 import (
 	"fmt"
+	"github.com/kubeflow/arena/pkg/util/kubectl"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/kubeflow/arena/pkg/apis/types"
 	"github.com/kubeflow/arena/pkg/apis/utils"
@@ -24,6 +26,22 @@ import (
 	"github.com/kubeflow/arena/pkg/workflow"
 	log "github.com/sirupsen/logrus"
 )
+
+func ScaleInTensorboardFromTrainingJob(jobName, namespace string, clientset *kubernetes.Clientset) error {
+	JobInfoFileName, err := kubectl.SaveAppConfigMapToFile(jobName, "values", namespace)
+	if err != nil {
+		log.Debugf("Failed to SaveAppConfigMapToFile due to %v", err)
+		return err
+	}
+
+	err = kubectl.CheckAndScaleInTensorboardWithAppInfoFile(JobInfoFileName, jobName, namespace, clientset)
+	if err != nil {
+		log.Warnf("Failed to UninstallAppsWithAppInfoFile due to %v", err)
+		return err
+	}
+
+	return nil
+}
 
 func DeleteTrainingJob(jobName, namespace string, jobType types.TrainingJobType) error {
 	var trainingTypes []string

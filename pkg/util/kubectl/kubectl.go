@@ -159,6 +159,46 @@ func UninstallAppsWithAppInfoFile(appInfoFile, namespace string) error {
 }
 
 /**
+* ScaleIn tensorboard deployment to zero
+**/
+func CheckAndScaleInTensorboardWithAppInfoFile(jobInfoFile, jobName, namespace string, clientset *kubernetes.Clientset) error {
+	data, err := ioutil.ReadFile(jobInfoFile)
+	if err != nil {
+		return err
+	}
+	resources := strings.Split(string(data), "\n")
+	isTensorboardNeedScaleIn := false
+	for _, resource := range resources {
+		values := strings.Split(resource, " ")
+		if values[0] == "cleanPodPolicy:" && values[1] == "All" {
+			isTensorboardNeedScaleIn = true
+		}
+	}
+
+	if !isTensorboardNeedScaleIn {
+		return nil
+	}
+
+	if kubeClient == nil {
+		kubeClient = clientset
+	}
+
+	tensorboardDelpoyment, err := kubeClient.AppsV1().Deployments(namespace).Get(context.TODO(), fmt.Sprintf("%s-tensorboard", jobName), metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	zeroReplica := int32(0)
+	tensorboardDelpoyment.Spec.Replicas = &zeroReplica
+	_, err = kubeClient.AppsV1().Deployments(namespace).Update(context.TODO(), tensorboardDelpoyment, metav1.UpdateOptions{})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+/**
 * Apply kubernetes config to install app
 * Exec /usr/local/bin/kubectl, [apply -f /tmp/values313606961 --namespace default]
 **/
