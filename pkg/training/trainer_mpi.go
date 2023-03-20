@@ -22,7 +22,8 @@ import (
 	"github.com/kubeflow/arena/pkg/apis/types"
 	"github.com/kubeflow/arena/pkg/apis/utils"
 	"github.com/kubeflow/arena/pkg/k8saccesser"
-	"github.com/kubeflow/arena/pkg/operators/mpi-operator/client/clientset/versioned"
+	"github.com/kubeflow/arena/pkg/operators/client/clientset/versioned"
+	commonv1 "github.com/kubeflow/common/pkg/apis/common/v1"
 	log "github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -32,7 +33,7 @@ import (
 
 	"time"
 
-	v1alpha1 "github.com/kubeflow/arena/pkg/operators/mpi-operator/apis/kubeflow/v1alpha1"
+	v1alpha1 "github.com/kubeflow/arena/pkg/operators/apis/kubeflow.org/v1"
 )
 
 // MPI Job Information
@@ -455,11 +456,21 @@ func (tt *MPIJobTrainer) ListTrainingJobs(namespace string, allNamespace bool) (
 
 func (mj *MPIJob) isSucceeded() bool {
 	// status.MPIJobLauncherStatusType
-	return mj.mpijob.Status.LauncherStatus == v1alpha1.LauncherSucceeded
+	for _, condition := range mj.mpijob.Status.Conditions {
+		if condition.Type == commonv1.JobSucceeded {
+			return true
+		}
+	}
+	return false
 }
 
 func (mj *MPIJob) isFailed() bool {
-	return mj.mpijob.Status.LauncherStatus == v1alpha1.LauncherFailed
+	for _, condition := range mj.mpijob.Status.Conditions {
+		if condition.Type == commonv1.JobFailed {
+			return true
+		}
+	}
+	return false
 }
 
 func (mj *MPIJob) isPending() bool {
@@ -480,7 +491,7 @@ func (mj *MPIJob) isPending() bool {
 // Get PriorityClass
 func (m *MPIJob) GetPriorityClass() string {
 	// return ""
-	return m.mpijob.Spec.Template.Spec.PriorityClassName
+	return m.mpijob.Spec.MPIReplicaSpecs[v1alpha1.MPIJobReplicaTypeWorker].Template.Spec.PriorityClassName
 }
 
 // filter out all pods and chief pod (master pod) of mpijob from pods in current system

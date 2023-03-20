@@ -20,7 +20,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/kubeflow/arena/pkg/operators/tf-operator/client/clientset/versioned"
+	"github.com/kubeflow/arena/pkg/operators/client/clientset/versioned"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,8 +28,8 @@ import (
 
 	"time"
 
-	commonv1 "github.com/kubeflow/arena/pkg/operators/tf-operator/apis/common/v1"
-	tfv1 "github.com/kubeflow/arena/pkg/operators/tf-operator/apis/tensorflow/v1"
+	tfv1 "github.com/kubeflow/arena/pkg/operators/apis/kubeflow.org/v1"
+	commonv1 "github.com/kubeflow/common/pkg/apis/common/v1"
 
 	"github.com/kubeflow/arena/pkg/apis/config"
 	"github.com/kubeflow/arena/pkg/apis/types"
@@ -127,7 +127,7 @@ func (tj *TensorFlowJob) Age() time.Duration {
 	return metav1.Now().Sub(job.Status.StartTime.Time)
 }
 
-//  Duration returns the duration of tfjob
+// Duration returns the duration of tfjob
 func (tj *TensorFlowJob) Duration() time.Duration {
 	job := tj.tfjob
 	if job.Status.StartTime == nil || job.Status.StartTime.IsZero() {
@@ -332,7 +332,7 @@ func (tt *TensorFlowJobTrainer) GetTrainingJob(name, namespace string) (Training
 func (tt *TensorFlowJobTrainer) isChiefPod(tfjob *tfv1.TFJob, item *v1.Pod) bool {
 
 	// find chief pod in chief mode
-	if _, ok := tfjob.Spec.TFReplicaSpecs[tfv1.TFReplicaTypeChief]; ok {
+	if _, ok := tfjob.Spec.TFReplicaSpecs[tfv1.TFJobReplicaTypeChief]; ok {
 		log.Debugf("The distributed tensorflow is in chief mode")
 		if val, ok := item.Labels[tfReplicaTypeLabel]; ok && (val == "chief") {
 			log.Debugf("the tfjob %s with labels %s is the chief pod", item.Name, val)

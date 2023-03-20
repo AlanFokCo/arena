@@ -17,37 +17,29 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes/scheme"
-
+	kubeflowv1 "github.com/kubeflow/arena/pkg/operators/apis/kubeflow.org/v1"
+	kubeflowversioned "github.com/kubeflow/arena/pkg/operators/client/clientset/versioned"
 	v1alpha12 "github.com/kubeflow/arena/pkg/operators/et-operator/api/v1alpha1"
 	etversioned "github.com/kubeflow/arena/pkg/operators/et-operator/client/clientset/versioned"
 	cron_v1alpha1 "github.com/kubeflow/arena/pkg/operators/kubedl-operator/apis/apps/v1alpha1"
 	cronversioned "github.com/kubeflow/arena/pkg/operators/kubedl-operator/client/clientset/versioned"
-	"github.com/kubeflow/arena/pkg/operators/mpi-operator/apis/kubeflow/v1alpha1"
-	mpiversioned "github.com/kubeflow/arena/pkg/operators/mpi-operator/client/clientset/versioned"
-	pytorch_v1 "github.com/kubeflow/arena/pkg/operators/pytorch-operator/apis/pytorch/v1"
-	pyversioned "github.com/kubeflow/arena/pkg/operators/pytorch-operator/client/clientset/versioned"
 	spark_v1beta2 "github.com/kubeflow/arena/pkg/operators/spark-operator/apis/sparkoperator.k8s.io/v1beta2"
 	sparkversioned "github.com/kubeflow/arena/pkg/operators/spark-operator/client/clientset/versioned"
-	tfv1 "github.com/kubeflow/arena/pkg/operators/tf-operator/apis/tensorflow/v1"
-	tfversioned "github.com/kubeflow/arena/pkg/operators/tf-operator/client/clientset/versioned"
 	volcano_v1alpha1 "github.com/kubeflow/arena/pkg/operators/volcano-operator/apis/batch/v1alpha1"
 	volcanovesioned "github.com/kubeflow/arena/pkg/operators/volcano-operator/client/clientset/versioned"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/kubernetes/scheme"
 )
 
 var accesser *k8sResourceAccesser
 var once sync.Once
 
 func init() {
-	tfv1.AddToScheme(scheme.Scheme)
-	v1alpha1.AddToScheme(scheme.Scheme)
 	v1alpha12.AddToScheme(scheme.Scheme)
-	pytorch_v1.AddToScheme(scheme.Scheme)
+	kubeflowv1.AddToScheme(scheme.Scheme)
 	spark_v1beta2.AddToScheme(scheme.Scheme)
 	volcano_v1alpha1.AddToScheme(scheme.Scheme)
 	cron_v1alpha1.AddToScheme(scheme.Scheme)
@@ -89,7 +81,7 @@ func NewK8sResourceAccesser(config *rest.Config, clientset *kubernetes.Clientset
 			log.Errorf("failed to create cacheClient, reason: %v", err)
 			return nil, err
 		}
-		cacheClient.IndexField(context.TODO(), &v1.Pod{}, "spec.nodeName", func(o runtime.Object) []string {
+		cacheClient.IndexField(context.TODO(), &v1.Pod{}, "spec.nodeName", func(o client.Object) []string {
 			if pod, ok := o.(*v1.Pod); ok {
 				return []string{pod.Spec.NodeName}
 			}
@@ -109,12 +101,12 @@ func (k *k8sResourceAccesser) Run() (err error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		if err = k.cacheClient.Start(context.Background().Done()); err != nil {
+		if err = k.cacheClient.Start(context.Background()); err != nil {
 			cancel()
 			log.Errorf("failed to start cacheClient, reason: %v", err)
 		}
 	}()
-	k.cacheClient.WaitForCacheSync(ctx.Done())
+	k.cacheClient.WaitForCacheSync(ctx)
 	return err
 }
 
@@ -386,9 +378,9 @@ func (k *k8sResourceAccesser) ListCrons(cronClient *cronversioned.Clientset, nam
 	return crons, nil
 }
 
-func (k *k8sResourceAccesser) ListTensorflowJobs(tfjobClient *tfversioned.Clientset, namespace string, tfjobLabel string) ([]*tfv1.TFJob, error) {
-	jobs := []*tfv1.TFJob{}
-	jobList := &tfv1.TFJobList{}
+func (k *k8sResourceAccesser) ListTensorflowJobs(tfjobClient *kubeflowversioned.Clientset, namespace string, tfjobLabel string) ([]*kubeflowv1.TFJob, error) {
+	jobs := []*kubeflowv1.TFJob{}
+	jobList := &kubeflowv1.TFJobList{}
 	var err error
 	labelSelector, err := parseLabelSelector(tfjobLabel)
 	if err != nil {
@@ -405,7 +397,8 @@ func (k *k8sResourceAccesser) ListTensorflowJobs(tfjobClient *tfversioned.Client
 		)
 
 	} else {
-		jobList, err = tfjobClient.KubeflowV1().TFJobs(namespace).List(metav1.ListOptions{
+
+		jobList, err = tfjobClient.KubeflowV1().TFJobs(namespace).List(context.Background(), metav1.ListOptions{
 			LabelSelector: labelSelector.String(),
 		})
 	}
@@ -418,9 +411,9 @@ func (k *k8sResourceAccesser) ListTensorflowJobs(tfjobClient *tfversioned.Client
 	return jobs, nil
 }
 
-func (k *k8sResourceAccesser) ListMPIJobs(mpijobClient *mpiversioned.Clientset, namespace string, labels string) ([]*v1alpha1.MPIJob, error) {
-	jobs := []*v1alpha1.MPIJob{}
-	jobList := &v1alpha1.MPIJobList{}
+func (k *k8sResourceAccesser) ListMPIJobs(mpijobClient *kubeflowversioned.Clientset, namespace string, labels string) ([]*kubeflowv1.MPIJob, error) {
+	jobs := []*kubeflowv1.MPIJob{}
+	jobList := &kubeflowv1.MPIJobList{}
 	var err error
 	labelSelector, err := parseLabelSelector(labels)
 	if err != nil {
@@ -435,7 +428,7 @@ func (k *k8sResourceAccesser) ListMPIJobs(mpijobClient *mpiversioned.Clientset, 
 				LabelSelector: labelSelector,
 			})
 	} else {
-		jobList, err = mpijobClient.KubeflowV1alpha1().MPIJobs(namespace).List(metav1.ListOptions{
+		jobList, err = mpijobClient.KubeflowV1().MPIJobs(namespace).List(context.Background(), metav1.ListOptions{
 			LabelSelector: labelSelector.String(),
 		})
 	}
@@ -448,9 +441,9 @@ func (k *k8sResourceAccesser) ListMPIJobs(mpijobClient *mpiversioned.Clientset, 
 	return jobs, nil
 }
 
-func (k *k8sResourceAccesser) ListPytorchJobs(pytorchjobClient *pyversioned.Clientset, namespace string, labels string) ([]*pytorch_v1.PyTorchJob, error) {
-	jobs := []*pytorch_v1.PyTorchJob{}
-	jobList := &pytorch_v1.PyTorchJobList{}
+func (k *k8sResourceAccesser) ListPytorchJobs(pytorchjobClient *kubeflowversioned.Clientset, namespace string, labels string) ([]*kubeflowv1.PyTorchJob, error) {
+	jobs := []*kubeflowv1.PyTorchJob{}
+	jobList := &kubeflowv1.PyTorchJobList{}
 	var err error
 	labelSelector, err := parseLabelSelector(labels)
 	if err != nil {
@@ -465,7 +458,7 @@ func (k *k8sResourceAccesser) ListPytorchJobs(pytorchjobClient *pyversioned.Clie
 				LabelSelector: labelSelector,
 			})
 	} else {
-		jobList, err = pytorchjobClient.KubeflowV1().PyTorchJobs(namespace).List(metav1.ListOptions{
+		jobList, err = pytorchjobClient.KubeflowV1().PyTorchJobs(namespace).List(context.Background(), metav1.ListOptions{
 			LabelSelector: labelSelector.String(),
 		})
 	}
@@ -585,8 +578,8 @@ func (k *k8sResourceAccesser) GetCron(cronClient *cronversioned.Clientset, names
 	return cron, nil
 }
 
-func (k *k8sResourceAccesser) GetTensorflowJob(tfjobClient *tfversioned.Clientset, namespace string, name string) (*tfv1.TFJob, error) {
-	tfjob := &tfv1.TFJob{}
+func (k *k8sResourceAccesser) GetTensorflowJob(tfjobClient *kubeflowversioned.Clientset, namespace string, name string) (*kubeflowv1.TFJob, error) {
+	tfjob := &kubeflowv1.TFJob{}
 	var err error
 	if k.cacheEnabled {
 		err = k.cacheClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: name}, tfjob)
@@ -597,7 +590,7 @@ func (k *k8sResourceAccesser) GetTensorflowJob(tfjobClient *tfversioned.Clientse
 			return nil, fmt.Errorf("failed to find tfjob %v from cache,reason: %v", name, err)
 		}
 	} else {
-		tfjob, err = tfjobClient.KubeflowV1().TFJobs(namespace).Get(name, metav1.GetOptions{})
+		tfjob, err = tfjobClient.KubeflowV1().TFJobs(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			if strings.Contains(err.Error(), fmt.Sprintf(`%v "%v" not found`, TensorflowCRDName, name)) {
 				return nil, types.ErrTrainingJobNotFound
@@ -608,8 +601,8 @@ func (k *k8sResourceAccesser) GetTensorflowJob(tfjobClient *tfversioned.Clientse
 	return tfjob, nil
 }
 
-func (k *k8sResourceAccesser) GetMPIJob(mpijobClient *mpiversioned.Clientset, namespace string, name string) (*v1alpha1.MPIJob, error) {
-	mpijob := &v1alpha1.MPIJob{}
+func (k *k8sResourceAccesser) GetMPIJob(mpijobClient *kubeflowversioned.Clientset, namespace string, name string) (*kubeflowv1.MPIJob, error) {
+	mpijob := &kubeflowv1.MPIJob{}
 	var err error
 	if k.cacheEnabled {
 		err = k.cacheClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: name}, mpijob)
@@ -620,7 +613,7 @@ func (k *k8sResourceAccesser) GetMPIJob(mpijobClient *mpiversioned.Clientset, na
 			return nil, fmt.Errorf("failed to find mpijob %v from cache,reason: %v", name, err)
 		}
 	} else {
-		mpijob, err = mpijobClient.KubeflowV1alpha1().MPIJobs(namespace).Get(name, metav1.GetOptions{})
+		mpijob, err = mpijobClient.KubeflowV1().MPIJobs(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			if strings.Contains(err.Error(), fmt.Sprintf(`%v "%v" not found`, MPICRDName, name)) {
 				return nil, types.ErrTrainingJobNotFound
@@ -631,8 +624,8 @@ func (k *k8sResourceAccesser) GetMPIJob(mpijobClient *mpiversioned.Clientset, na
 	return mpijob, err
 }
 
-func (k *k8sResourceAccesser) GetPytorchJob(pytorchjobClient *pyversioned.Clientset, namespace string, name string) (*pytorch_v1.PyTorchJob, error) {
-	pytorchjob := &pytorch_v1.PyTorchJob{}
+func (k *k8sResourceAccesser) GetPytorchJob(pytorchjobClient *kubeflowversioned.Clientset, namespace string, name string) (*kubeflowv1.PyTorchJob, error) {
+	pytorchjob := &kubeflowv1.PyTorchJob{}
 	var err error
 	if k.cacheEnabled {
 		err = k.cacheClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: name}, pytorchjob)
@@ -644,7 +637,7 @@ func (k *k8sResourceAccesser) GetPytorchJob(pytorchjobClient *pyversioned.Client
 		}
 
 	} else {
-		pytorchjob, err = pytorchjobClient.KubeflowV1().PyTorchJobs(namespace).Get(name, metav1.GetOptions{})
+		pytorchjob, err = pytorchjobClient.KubeflowV1().PyTorchJobs(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			if strings.Contains(err.Error(), fmt.Sprintf(`%v "%v" not found`, PytorchCRDName, name)) {
 				return nil, types.ErrTrainingJobNotFound
