@@ -126,11 +126,14 @@ In this case,we only display the last 10 lines of the logs.
 
 ## Get the logviewer
 
-More information about the training job in the logviewer:
+More information about the training job in the logviewer, if you can request internal network's IP of the pod in cluster, or by port-forward.:
 
     $ arena logviewer tf-standalone-test-with-git
     Your LogViewer will be available on:
     172.20.0.197:8080/tfjobs/ui/#/default/tf-standalone-test-with-git
+    $ kubectl port-forward service/tf-job-dashboard -n arena-system 30002:80
+    Forwarding from 127.0.0.1:30007 -> 8080
+    Forwarding from [::1]:30007 -> 8080
 
 ![logviewer](1-tfjob-logviewer.jpg)
 
